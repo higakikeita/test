@@ -16,6 +16,20 @@ TerraformとAWS SAM（Serverless Application Model）を組み合わせて、エ
 
 ### アーキテクチャ図
 
+**AWS公式アイコンを使った図:**
+
+#### シンプル版
+![アーキテクチャ概要](docs/images/architecture_simple.png)
+
+#### 詳細版
+![Terraform + SAM アーキテクチャ](docs/images/architecture.png)
+
+#### データフロー詳細
+![データフロー](docs/images/dataflow.png)
+
+<details>
+<summary>📊 Mermaid図版（クリックで展開）</summary>
+
 ```mermaid
 graph TB
     subgraph Internet
@@ -71,6 +85,8 @@ graph TB
     style CW fill:#ea9999
     style APIGW fill:#b6d7a8
 ```
+
+</details>
 
 **凡例:**
 - 🔒 **VPC**: セキュアなプライベートネットワーク

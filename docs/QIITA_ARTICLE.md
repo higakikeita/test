@@ -64,6 +64,20 @@ https://github.com/higakikeita/test/blob/main/docs/architecture.drawio
 
 ### システムアーキテクチャ図
 
+**AWS公式アイコンを使ったアーキテクチャ図:**
+
+#### シンプル版（全体像）
+![アーキテクチャ概要](images/architecture_simple.png)
+
+#### 詳細版（フル構成）
+![Terraform + SAM アーキテクチャ](images/architecture.png)
+
+#### データフロー詳細
+![データフロー](images/dataflow.png)
+
+<details>
+<summary>📊 Mermaid図版（インタラクティブ）</summary>
+
 ```mermaid
 graph TB
     subgraph Internet
@@ -134,7 +148,10 @@ graph TB
     style APIGW fill:#66cc66
 ```
 
-> **📊 編集可能な詳細図**: [architecture.drawio](https://github.com/higakikeita/test/blob/main/docs/architecture.drawio)
+</details>
+
+> **📊 編集可能な詳細図**: VS Codeで [architecture.drawio](https://github.com/higakikeita/test/blob/main/docs/architecture.drawio) を開いて編集できます
+> **🐍 図の自動生成**: `python3 scripts/generate_diagrams.py` でAWS公式アイコンの図を再生成できます
 
 ### システム構成図（簡易版）
 
