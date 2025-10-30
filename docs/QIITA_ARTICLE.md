@@ -24,7 +24,10 @@ TerraformとAWS SAM（Serverless Application Model）を組み合わせること
 ### サンプルプロジェクト
 
 完全なソースコードは以下で公開しています：
-https://github.com/yourname/terraform-sam-demo
+https://github.com/higakikeita/test
+
+**アーキテクチャ図（編集可能）**:
+https://github.com/higakikeita/test/blob/main/docs/architecture.drawio
 
 ## なぜTerraform + SAMなのか？
 
@@ -1176,12 +1179,13 @@ TerraformとAWS SAMを適切に組み合わせることで、以下が実現で�
 ### リポジトリ
 
 完全なソースコードはこちら：
-https://github.com/yourname/terraform-sam-demo
+https://github.com/higakikeita/test
 
-ドキュメント：
-- [アーキテクチャ設計書](docs/architecture.md)
-- [トラブルシューティング](docs/TROUBLESHOOTING.md)
-- [ベストプラクティス](docs/BEST_PRACTICES.md)
+**ドキュメント：**
+- [アーキテクチャ設計書](https://github.com/higakikeita/test/blob/main/docs/architecture.md)
+- [アーキテクチャ図（編集可能）](https://github.com/higakikeita/test/blob/main/docs/architecture.drawio)
+- [トラブルシューティング](https://github.com/higakikeita/test/blob/main/docs/TROUBLESHOOTING.md)
+- [ベストプラクティス](https://github.com/higakikeita/test/blob/main/docs/BEST_PRACTICES.md)
 
 ## 参考資料
 

@@ -14,8 +14,21 @@ TerraformとAWS SAM（Serverless Application Model）を組み合わせて、エ
 
 ## 🏗️ アーキテクチャ概要
 
-> **📊 詳細なアーキテクチャ図**: [docs/architecture.drawio](docs/architecture.drawio) をVS Codeで開いて確認・編集できます
-> **推奨**: Draw.io Integration 拡張機能をインストール済み
+### アーキテクチャ図
+
+> **📊 編集可能な図**: [docs/architecture.drawio](docs/architecture.drawio) をVS Codeまたはdraw.ioで開いて確認・編集できます
+>
+> **GitHub上で表示**: https://github.com/higakikeita/test/blob/main/docs/architecture.drawio
+
+<!--
+画像を追加する場合:
+1. VS Codeでarchitecture.drawioを開く
+2. メニューから Export → PNG を選択
+3. docs/architecture.png として保存
+4. 以下のコメントを解除:
+
+![アーキテクチャ図](docs/architecture.png)
+-->
 
 このプロジェクトは以下のような責務分離を実現しています：
 
