@@ -64,16 +64,47 @@ https://github.com/higakikeita/test/blob/main/docs/architecture.drawio
 
 ### システムアーキテクチャ図
 
-**AWS公式アイコンを使ったアーキテクチャ図:**
+**AWS公式アイコンを使ったプロフェッショナルな図:**
 
-#### シンプル版（全体像）
-![アーキテクチャ概要](images/architecture_simple.png)
+Python の `diagrams` ライブラリで自動生成された、AWS公式アイコンを使用したアーキテクチャ図です。
 
-#### 詳細版（フル構成）
-![Terraform + SAM アーキテクチャ](images/architecture.png)
+#### 📋 シンプル版（全体像の理解に最適）
 
-#### データフロー詳細
-![データフロー](images/dataflow.png)
+基本的なデータフローを一目で理解できる簡潔な図です。
+
+![システム概要](https://raw.githubusercontent.com/higakikeita/test/main/docs/images/architecture_simple.png)
+
+**特徴:**
+- 番号付きフロー（1→2→3→4）で処理の流れが明確
+- 主要なコンポーネントのみに絞って表示
+- README や概要説明に最適
+
+#### 🏗️ 詳細版（技術仕様書向け）
+
+すべてのコンポーネントとその関係性を詳細に表示した図です。
+
+![Terraform + SAM アーキテクチャ](https://raw.githubusercontent.com/higakikeita/test/main/docs/images/architecture.png)
+
+**特徴:**
+- VPC構成（Private Subnet、Public Subnet、NAT Gateway）
+- VPC Endpoints（DynamoDB、S3）を明示
+- 3つのLambda関数とそれぞれの役割
+- 色分けされた接続線（青=HTTPS、緑=Invoke、紫=VPC内、オレンジ=Streams）
+- EventBridge によるスケジュール実行
+
+#### 🔄 データフロー詳細（処理フローの理解に最適）
+
+リクエストから応答までのデータの流れを層別に表示した図です。
+
+![データフロー詳細](https://raw.githubusercontent.com/higakikeita/test/main/docs/images/dataflow.png)
+
+**特徴:**
+- ①〜⑥の層構造で責務を明確化
+- CRUD操作の双方向フロー（リクエスト→レスポンス）
+- DynamoDB Streams による非同期処理
+- EventBridge によるバッチ処理
+- 全Lambda関数からCloudWatchへのロギング
+- Google風カラースキームで視認性向上
 
 <details>
 <summary>📊 Mermaid図版（インタラクティブ）</summary>
@@ -283,16 +314,89 @@ terraform-sam-demo/
 │   ├── layers/            # Lambda レイヤー
 │   │   └── common/
 │   └── events/            # テストイベント
-├── scripts/               # デプロイスクリプト
-│   ├── deploy.sh
-│   └── validate.sh
+├── scripts/               # スクリプト
+│   ├── deploy.sh          # デプロイスクリプト
+│   ├── validate.sh        # 検証スクリプト
+│   └── generate_diagrams.py  # 図の自動生成
 ├── .github/workflows/     # CI/CD
 │   └── deploy.yml
 └── docs/                  # ドキュメント
     ├── architecture.md
     ├── TROUBLESHOOTING.md
-    └── BEST_PRACTICES.md
+    ├── BEST_PRACTICES.md
+    └── images/            # アーキテクチャ図
+        ├── architecture.png
+        ├── architecture_simple.png
+        ├── dataflow.png
+        └── README.md      # 図の生成方法
 ```
+
+## アーキテクチャ図の自動生成
+
+このプロジェクトでは、Python の `diagrams` ライブラリを使用してAWS公式アイコンのアーキテクチャ図を自動生成しています。
+
+### 生成方法
+
+```bash
+# 必要なツールのインストール
+brew install graphviz
+pip3 install diagrams
+
+# 図の生成
+python3 scripts/generate_diagrams.py
+```
+
+実行すると、`docs/images/` に以下の3つのPNG画像が生成されます：
+
+- **architecture_simple.png** - シンプルな概要図
+- **architecture.png** - 詳細なフル構成図
+- **dataflow.png** - データフロー詳細図
+
+### 図の特徴
+
+**レイアウトの工夫:**
+```python
+graph_attr = {
+    "splines": "ortho",    # 直角の美しい線
+    "nodesep": "0.8",      # ノード間の間隔
+    "ranksep": "1.0",      # 階層間の余白
+}
+```
+
+**色分けによる視覚化:**
+```python
+# メインフロー
+users >> Edge(color="darkblue", style="bold", label="HTTPS") >> apigw
+apigw >> Edge(color="darkgreen", style="bold", label="Invoke") >> lambda_api
+
+# Stream処理
+dynamodb >> Edge(color="orange", style="bold", label="Streams") >> lambda_processor
+
+# ロギング
+lambda_api >> Edge(color="gray", style="dotted") >> cloudwatch
+```
+
+**メリット:**
+- コードで管理できるため、変更履歴が追跡可能
+- 構成変更時に自動で再生成
+- AWS公式アイコンでプロフェッショナルな仕上がり
+- バージョン管理が容易
+
+### カスタマイズ
+
+`scripts/generate_diagrams.py` を編集することで、簡単にカスタマイズできます：
+
+```python
+# 新しいAWSサービスの追加例
+from diagrams.aws.network import CloudFront
+from diagrams.aws.security import WAF
+
+# 図に追加
+cloudfront = CloudFront("CloudFront")
+waf = WAF("WAF")
+```
+
+詳しくは [diagrams公式ドキュメント](https://diagrams.mingrammer.com/) を参照してください。
 
 ## 実装：Terraformでインフラ構築
 
@@ -1245,6 +1349,11 @@ TerraformとAWS SAMを適切に組み合わせることで、以下が実現で�
 - ARM64アーキテクチャ
 - 適切なリソースサイジング
 
+✅ **ドキュメント自動化**
+- AWS公式アイコンを使ったアーキテクチャ図の自動生成
+- コードとしての図管理（diagrams library）
+- バージョン管理とレビューが容易
+
 ### 次のステップ
 
 さらに機能を拡張する場合：
@@ -1272,16 +1381,24 @@ https://github.com/higakikeita/test
 
 **ドキュメント：**
 - [アーキテクチャ設計書](https://github.com/higakikeita/test/blob/main/docs/architecture.md)
-- [アーキテクチャ図（編集可能）](https://github.com/higakikeita/test/blob/main/docs/architecture.drawio)
+- [アーキテクチャ図の自動生成スクリプト](https://github.com/higakikeita/test/blob/main/scripts/generate_diagrams.py)
+- [アーキテクチャ図（編集可能Draw.io）](https://github.com/higakikeita/test/blob/main/docs/architecture.drawio)
+- [図の生成方法](https://github.com/higakikeita/test/blob/main/docs/images/README.md)
 - [トラブルシューティング](https://github.com/higakikeita/test/blob/main/docs/TROUBLESHOOTING.md)
 - [ベストプラクティス](https://github.com/higakikeita/test/blob/main/docs/BEST_PRACTICES.md)
 
 ## 参考資料
 
+**AWS公式:**
 - [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
 - [AWS SAM Documentation](https://docs.aws.amazon.com/serverless-application-model/)
 - [AWS Lambda Best Practices](https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html)
 - [DynamoDB Single Table Design](https://aws.amazon.com/blogs/compute/creating-a-single-table-design-with-amazon-dynamodb/)
+
+**ツール:**
+- [Diagrams - Diagram as Code](https://diagrams.mingrammer.com/)
+- [Graphviz](https://graphviz.org/)
+- [AWS Architecture Icons](https://aws.amazon.com/jp/architecture/icons/)
 
 ---
 
