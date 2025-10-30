@@ -16,19 +16,70 @@ TerraformとAWS SAM（Serverless Application Model）を組み合わせて、エ
 
 ### アーキテクチャ図
 
-> **📊 編集可能な図**: [docs/architecture.drawio](docs/architecture.drawio) をVS Codeまたはdraw.ioで開いて確認・編集できます
->
-> **GitHub上で表示**: https://github.com/higakikeita/test/blob/main/docs/architecture.drawio
+```mermaid
+graph TB
+    subgraph Internet
+        User[👤 User]
+    end
 
-<!--
-画像を追加する場合:
-1. VS Codeでarchitecture.drawioを開く
-2. メニューから Export → PNG を選択
-3. docs/architecture.png として保存
-4. 以下のコメントを解除:
+    User -->|HTTPS| APIGW[🌐 API Gateway<br/>REST API]
 
-![アーキテクチャ図](docs/architecture.png)
--->
+    subgraph VPC[🔒 VPC - 10.0.0.0/16]
+        subgraph PublicSubnet[Public Subnet]
+            NAT1[🔄 NAT Gateway 1<br/>ap-northeast-1a]
+            NAT2[🔄 NAT Gateway 2<br/>ap-northeast-1c]
+        end
+
+        subgraph PrivateSubnet[Private Subnet]
+            Lambda1[⚡ Lambda<br/>API Function<br/>256MB ARM64]
+            Lambda2[⚡ Lambda<br/>Processor<br/>256MB ARM64]
+            Lambda3[⚡ Lambda<br/>Scheduled<br/>256MB ARM64]
+
+            subgraph VPCEndpoints[VPC Endpoints]
+                VPCE_S3[📦 S3 Endpoint]
+                VPCE_DDB[🗄️ DynamoDB Endpoint]
+            end
+        end
+    end
+
+    APIGW -->|Invoke| Lambda1
+    Lambda1 -.->|VPC Endpoint| VPCE_DDB
+    VPCE_DDB -.-> DDB
+
+    DDB[🗄️ DynamoDB Table<br/>Single Table Design<br/>Streams enabled]
+    DDB -->|Stream Events| Lambda2
+
+    EventBridge[⏰ EventBridge<br/>Cron: 0 0 * * ?] -->|Trigger| Lambda3
+    Lambda3 -.-> DDB
+
+    Lambda1 -.->|Logs| CW
+    Lambda2 -.->|Logs| CW
+    Lambda3 -.->|Logs| CW
+
+    CW[📊 CloudWatch<br/>Logs/Metrics/Alarms]
+
+    S3[📦 S3 Bucket<br/>SAM Artifacts]
+
+    style VPC fill:#e8f4f8
+    style PublicSubnet fill:#d4edda
+    style PrivateSubnet fill:#cce5ff
+    style VPCEndpoints fill:#fff3cd
+    style Lambda1 fill:#ffd966
+    style Lambda2 fill:#ffd966
+    style Lambda3 fill:#ffd966
+    style DDB fill:#9fc5e8
+    style CW fill:#ea9999
+    style APIGW fill:#b6d7a8
+```
+
+**凡例:**
+- 🔒 **VPC**: セキュアなプライベートネットワーク
+- ⚡ **Lambda**: サーバーレス関数（ARM64 Graviton2）
+- 🗄️ **DynamoDB**: NoSQLデータベース（Single Table Design）
+- 📊 **CloudWatch**: 統合監視サービス
+- 🔄 **NAT Gateway**: Lambda → Internet 接続用
+
+> **📊 詳細な編集可能な図**: [docs/architecture.drawio](docs/architecture.drawio) をVS Codeで開いて確認・編集できます
 
 このプロジェクトは以下のような責務分離を実現しています：
 

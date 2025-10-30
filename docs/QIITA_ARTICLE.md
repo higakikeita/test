@@ -62,9 +62,81 @@ https://github.com/higakikeita/test/blob/main/docs/architecture.drawio
 
 今回構築するシステムのアーキテクチャは以下の通りです：
 
-> **📊 詳細なアーキテクチャ図**: [architecture.drawio](docs/architecture.drawio) をVS Codeで開いて確認・編集できます（Draw.io Integration拡張機能が必要）
+### システムアーキテクチャ図
 
-### システム構成図
+```mermaid
+graph TB
+    subgraph Internet
+        User[👤 User / Client]
+    end
+
+    User -->|HTTPS Request| APIGW[🌐 API Gateway<br/>REST API<br/>+ CORS + Throttling]
+
+    subgraph AWS["☁️ AWS Cloud"]
+        subgraph VPC["🔒 VPC - 10.0.0.0/16"]
+            subgraph AZ1["Availability Zone: ap-northeast-1a"]
+                subgraph PubSub1["Public Subnet 1"]
+                    NAT1[🔄 NAT Gateway 1]
+                end
+                subgraph PriSub1["Private Subnet 1"]
+                    Lambda1[⚡ Lambda: API<br/>256MB / ARM64 / 30s]
+                    Lambda2[⚡ Lambda: Processor<br/>256MB / ARM64]
+                end
+            end
+
+            subgraph AZ2["Availability Zone: ap-northeast-1c"]
+                subgraph PubSub2["Public Subnet 2"]
+                    NAT2[🔄 NAT Gateway 2<br/>本番環境のみ]
+                end
+                subgraph PriSub2["Private Subnet 2"]
+                    Lambda3[⚡ Lambda: Scheduled<br/>256MB / ARM64 / 60s]
+                    VPCE[📡 VPC Endpoints<br/>S3 / DynamoDB]
+                end
+            end
+        end
+
+        DDB[(🗄️ DynamoDB Table<br/>PAY_PER_REQUEST<br/>+ Streams<br/>+ GSI x2<br/>+ TTL)]
+        S3[📦 S3 Bucket<br/>SAM Artifacts<br/>+ Versioning<br/>+ Encryption]
+        CW[📊 CloudWatch<br/>Logs / Metrics<br/>Alarms / Dashboard]
+        EB[⏰ EventBridge<br/>Cron: 0 0 * * ?]
+    end
+
+    APIGW -->|Invoke| Lambda1
+    Lambda1 -.->|VPC Endpoint| VPCE
+    VPCE -.-> DDB
+    VPCE -.-> S3
+
+    DDB ==>|Stream Events<br/>Batch: 10| Lambda2
+    Lambda2 -.->|Metrics| CW
+
+    EB -->|Daily Trigger| Lambda3
+    Lambda3 -.-> DDB
+
+    Lambda1 -.->|Logs| CW
+    Lambda2 -.->|Logs| CW
+    Lambda3 -.->|Logs| CW
+
+    DDB -.->|Metrics| CW
+    APIGW -.->|Access Logs| CW
+
+    style VPC fill:#e8f4f8,stroke:#0066cc,stroke-width:3px
+    style AZ1 fill:#f0f8ff,stroke:#6699cc
+    style AZ2 fill:#f0f8ff,stroke:#6699cc
+    style PubSub1 fill:#d4edda
+    style PubSub2 fill:#d4edda
+    style PriSub1 fill:#cce5ff
+    style PriSub2 fill:#cce5ff
+    style Lambda1 fill:#ff9900
+    style Lambda2 fill:#ff9900
+    style Lambda3 fill:#ff9900
+    style DDB fill:#3366cc
+    style CW fill:#ff6666
+    style APIGW fill:#66cc66
+```
+
+> **📊 編集可能な詳細図**: [architecture.drawio](https://github.com/higakikeita/test/blob/main/docs/architecture.drawio)
+
+### システム構成図（簡易版）
 
 ```
 Internet
