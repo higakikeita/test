@@ -39,9 +39,9 @@ edge_attr = {
     "fontsize": "11",
 }
 
-# メインアーキテクチャ図 - より綺麗なレイアウト
+# メインアーキテクチャ図 - Terraform/SAM管理範囲を明示
 with Diagram(
-    "Terraform + SAM アーキテクチャ",
+    "Terraform + SAM アーキテクチャ（管理範囲明示）",
     filename=str(output_dir / "architecture"),
     direction="LR",
     graph_attr=graph_attr,
@@ -53,33 +53,35 @@ with Diagram(
     with Cluster("クライアント"):
         users = Users("ユーザー")
 
-    with Cluster("API層"):
-        apigw = APIGateway("API Gateway")
+    with Cluster("🔷 SAM管理範囲"):
+        with Cluster("API層"):
+            apigw = APIGateway("API Gateway\n※SAM")
 
-    with Cluster("VPC: 10.0.0.0/16"):
-        with Cluster("Private Subnet - Lambda"):
-            lambda_api = Lambda("API Function\n(ARM64, 256MB)")
-            lambda_processor = Lambda("Stream Processor\n(ARM64, 256MB)")
-            lambda_scheduled = Lambda("Scheduled Task\n(ARM64, 256MB)")
+        with Cluster("Lambda Functions"):
+            lambda_api = Lambda("API Function\n(ARM64, 256MB)\n※SAM")
+            lambda_processor = Lambda("Stream Processor\n(ARM64, 256MB)\n※SAM")
+            lambda_scheduled = Lambda("Scheduled Task\n(ARM64, 256MB)\n※SAM")
 
-        with Cluster("Public Subnet - NAT"):
-            nat_gw = NATGateway("NAT Gateway\n(Multi-AZ)")
+        with Cluster("イベント"):
+            eventbridge = Eventbridge("EventBridge\nCron Trigger\n※SAM")
 
-        with Cluster("VPC Endpoints"):
-            vpc_ddb = Endpoint("DynamoDB\nEndpoint")
-            vpc_s3 = Endpoint("S3\nEndpoint")
+    with Cluster("🟦 Terraform管理範囲"):
+        with Cluster("VPC: 10.0.0.0/16"):
+            with Cluster("Public Subnet - NAT"):
+                nat_gw = NATGateway("NAT Gateway\n(Multi-AZ)\n※Terraform")
 
-    with Cluster("データ層"):
-        dynamodb = Dynamodb("DynamoDB\nSingle Table")
+            with Cluster("VPC Endpoints"):
+                vpc_ddb = Endpoint("DynamoDB\nEndpoint\n※Terraform")
+                vpc_s3 = Endpoint("S3\nEndpoint\n※Terraform")
 
-    with Cluster("ストレージ"):
-        s3 = S3("S3 Bucket\nArtifacts")
+        with Cluster("データ層"):
+            dynamodb = Dynamodb("DynamoDB\nSingle Table\n※Terraform")
 
-    with Cluster("監視"):
-        cloudwatch = Cloudwatch("CloudWatch\nLogs & Metrics")
+        with Cluster("ストレージ"):
+            s3 = S3("S3 Bucket\nArtifacts\n※Terraform")
 
-    with Cluster("スケジューラー"):
-        eventbridge = Eventbridge("EventBridge\nCron Trigger")
+        with Cluster("監視基盤"):
+            cloudwatch = Cloudwatch("CloudWatch\nLogs & Metrics\n※Terraform")
 
     # メインフロー
     users >> Edge(color="darkblue", style="bold", label="HTTPS") >> apigw
@@ -103,9 +105,9 @@ with Diagram(
     vpc_s3 >> Edge(style="dashed") >> s3
     nat_gw >> Edge(color="gray", style="dotted", label="Internet") >> cloudwatch
 
-# シンプルな図（README用） - クリーンなレイアウト
+# シンプルな図（README用） - 管理範囲を明示
 with Diagram(
-    "システム概要",
+    "システム概要（管理範囲別）",
     filename=str(output_dir / "architecture_simple"),
     direction="LR",
     graph_attr={**graph_attr, "splines": "spline", "ranksep": "1.5"},
@@ -115,22 +117,25 @@ with Diagram(
     outformat="png"
 ):
     users = Users("ユーザー")
-    apigw = APIGateway("API Gateway")
 
-    with Cluster("AWS VPC"):
-        lambdas = Lambda("Lambda Functions\n(Python 3.11)")
+    with Cluster("🔷 SAM管理"):
+        apigw = APIGateway("API Gateway")
 
-    dynamodb = Dynamodb("DynamoDB\nTable")
-    cloudwatch = Cloudwatch("CloudWatch\nMonitoring")
+        with Cluster("VPC"):
+            lambdas = Lambda("Lambda Functions\n(Python 3.11)")
+
+    with Cluster("🟦 Terraform管理"):
+        dynamodb = Dynamodb("DynamoDB\nTable")
+        cloudwatch = Cloudwatch("CloudWatch\nMonitoring")
 
     users >> Edge(label="1. HTTPS") >> apigw
     apigw >> Edge(label="2. Invoke") >> lambdas
     lambdas >> Edge(label="3. CRUD") >> dynamodb
     lambdas >> Edge(label="4. Logs", style="dotted") >> cloudwatch
 
-# 詳細なデータフロー図 - 縦型レイアウト
+# 詳細なデータフロー図 - 管理範囲を明示
 with Diagram(
-    "データフロー詳細",
+    "データフロー詳細（管理範囲別）",
     filename=str(output_dir / "dataflow"),
     direction="TB",
     graph_attr={**graph_attr, "splines": "ortho", "ranksep": "1.2"},
@@ -142,22 +147,24 @@ with Diagram(
     with Cluster("① クライアント層"):
         users = Users("ユーザー")
 
-    with Cluster("② API ゲートウェイ層"):
-        apigw = APIGateway("API Gateway\nREST API")
+    with Cluster("🔷 SAM管理範囲"):
+        with Cluster("② API層"):
+            apigw = APIGateway("API Gateway\nREST API\n※SAM")
 
-    with Cluster("③ アプリケーション層 (VPC)"):
-        lambda_api = Lambda("API Lambda\nCRUD Operations")
-        lambda_processor = Lambda("Stream Processor\nEvent Driven")
-        lambda_scheduled = Lambda("Scheduled Job\nBatch Process")
+        with Cluster("③ Lambda層"):
+            lambda_api = Lambda("API Lambda\nCRUD Operations\n※SAM")
+            lambda_processor = Lambda("Stream Processor\nEvent Driven\n※SAM")
+            lambda_scheduled = Lambda("Scheduled Job\nBatch Process\n※SAM")
 
-    with Cluster("④ データ層"):
-        dynamodb = Dynamodb("DynamoDB\nSingle Table Design")
+        with Cluster("⑤ イベント層"):
+            eventbridge = Eventbridge("EventBridge\nScheduler\n※SAM")
 
-    with Cluster("⑤ イベント層"):
-        eventbridge = Eventbridge("EventBridge\nScheduler")
+    with Cluster("🟦 Terraform管理範囲"):
+        with Cluster("④ データ層"):
+            dynamodb = Dynamodb("DynamoDB\nSingle Table Design\n※Terraform")
 
-    with Cluster("⑥ 監視層"):
-        cloudwatch = Cloudwatch("CloudWatch\nLogs & Alarms")
+        with Cluster("⑥ 監視層"):
+            cloudwatch = Cloudwatch("CloudWatch\nLogs & Alarms\n※Terraform")
 
     # メインAPI フロー
     users >> Edge(color="#1a73e8", style="bold", label="HTTPS Request") >> apigw
