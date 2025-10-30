@@ -1,0 +1,8 @@
+# AWS SDK for Python
+boto3>=1.28.0
+
+# AWS X-Ray SDK（トレーシング用）
+aws-xray-sdk>=2.12.0
+
+# その他の依存関係
+# opensearch-py>=2.0.0  # OpenSearch連携時

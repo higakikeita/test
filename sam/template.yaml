@@ -1,0 +1,397 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  SAM Application with Terraform-managed infrastructure
+  This template deploys Lambda functions, API Gateway, and event sources
+  using infrastructure resources created by Terraform.
+
+# ========================================
+# パラメータ（Terraformから渡される）
+# ========================================
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Environment name (dev, staging, prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+  VpcId:
+    Type: String
+    Description: VPC ID from Terraform
+
+  SubnetIds:
+    Type: CommaDelimitedList
+    Description: Private subnet IDs from Terraform (comma-separated)
+
+  SecurityGroupId:
+    Type: String
+    Description: Lambda security group ID from Terraform
+
+  LambdaApiRoleArn:
+    Type: String
+    Description: IAM Role ARN for API Lambda function
+
+  LambdaProcessorRoleArn:
+    Type: String
+    Description: IAM Role ARN for Processor Lambda function
+
+  DynamoDBTableName:
+    Type: String
+    Description: DynamoDB table name from Terraform
+
+  DynamoDBStreamArn:
+    Type: String
+    Description: DynamoDB Streams ARN from Terraform
+    Default: ""
+
+  LogRetentionDays:
+    Type: Number
+    Description: CloudWatch Logs retention days
+    Default: 7
+
+  LambdaInsightsLayerArn:
+    Type: String
+    Description: Lambda Insights Layer ARN (optional)
+    Default: ""
+
+# ========================================
+# 条件
+# ========================================
+
+Conditions:
+  # Lambda Insights が有効かどうか
+  UseLambdaInsights: !Not [!Equals [!Ref LambdaInsightsLayerArn, ""]]
+
+  # DynamoDB Streams が有効かどうか
+  UseDynamoDBStreams: !Not [!Equals [!Ref DynamoDBStreamArn, ""]]
+
+  # 本番環境かどうか
+  IsProduction: !Equals [!Ref Environment, "prod"]
+
+# ========================================
+# グローバル設定
+# ========================================
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 30
+    MemorySize: 256
+    Architectures:
+      - arm64  # Graviton2（コスト削減）
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        DYNAMODB_TABLE: !Ref DynamoDBTableName
+        LOG_LEVEL: !If [IsProduction, "INFO", "DEBUG"]
+        POWERTOOLS_SERVICE_NAME: terraform-sam-demo
+        POWERTOOLS_METRICS_NAMESPACE: TerraformSAMDemo
+    # VPC設定
+    VpcConfig:
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      SubnetIds: !Ref SubnetIds
+    # X-Ray トレーシング
+    Tracing: Active
+    # タグ
+    Tags:
+      Environment: !Ref Environment
+      ManagedBy: SAM
+      Project: TerraformSAMDemo
+
+  Api:
+    # CORS設定
+    Cors:
+      AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      AllowOrigin: "'*'"
+    # アクセスログ
+    AccessLogSetting:
+      DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+      Format: '$context.requestId $context.error.message $context.error.messageString'
+    # スロットリング
+    ThrottleSettings:
+      RateLimit: !If [IsProduction, 1000, 100]
+      BurstLimit: !If [IsProduction, 2000, 200]
+
+# ========================================
+# リソース
+# ========================================
+
+Resources:
+  # ========================================
+  # API Gateway アクセスログ
+  # ========================================
+
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/apigateway/${Environment}-api
+      RetentionInDays: !Ref LogRetentionDays
+
+  # ========================================
+  # Lambda Layer（共通ライブラリ）
+  # ========================================
+
+  CommonLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub ${Environment}-common-layer
+      Description: Common libraries and utilities
+      ContentUri: layers/common/
+      CompatibleRuntimes:
+        - python3.11
+      CompatibleArchitectures:
+        - arm64
+    Metadata:
+      BuildMethod: python3.11
+
+  # ========================================
+  # API Lambda Function
+  # ========================================
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub terraform-sam-demo-${Environment}-api
+      Description: REST API handler
+      CodeUri: functions/api/
+      Handler: index.lambda_handler
+      Role: !Ref LambdaApiRoleArn
+      Layers:
+        - !Ref CommonLayer
+        - !If
+          - UseLambdaInsights
+          - !Ref LambdaInsightsLayerArn
+          - !Ref AWS::NoValue
+      Environment:
+        Variables:
+          API_VERSION: v1
+      Events:
+        # GET /items
+        GetItems:
+          Type: Api
+          Properties:
+            Path: /items
+            Method: GET
+            RestApiId: !Ref ApiGateway
+
+        # GET /items/{id}
+        GetItem:
+          Type: Api
+          Properties:
+            Path: /items/{id}
+            Method: GET
+            RestApiId: !Ref ApiGateway
+
+        # POST /items
+        CreateItem:
+          Type: Api
+          Properties:
+            Path: /items
+            Method: POST
+            RestApiId: !Ref ApiGateway
+
+        # PUT /items/{id}
+        UpdateItem:
+          Type: Api
+          Properties:
+            Path: /items/{id}
+            Method: PUT
+            RestApiId: !Ref ApiGateway
+
+        # DELETE /items/{id}
+        DeleteItem:
+          Type: Api
+          Properties:
+            Path: /items/{id}
+            Method: DELETE
+            RestApiId: !Ref ApiGateway
+
+        # Health check
+        HealthCheck:
+          Type: Api
+          Properties:
+            Path: /health
+            Method: GET
+            RestApiId: !Ref ApiGateway
+
+  # ========================================
+  # Processor Lambda Function
+  # ========================================
+
+  ProcessorFunction:
+    Type: AWS::Serverless::Function
+    Condition: UseDynamoDBStreams
+    Properties:
+      FunctionName: !Sub terraform-sam-demo-${Environment}-processor
+      Description: Processes DynamoDB stream events
+      CodeUri: functions/processor/
+      Handler: index.lambda_handler
+      Role: !Ref LambdaProcessorRoleArn
+      Layers:
+        - !Ref CommonLayer
+        - !If
+          - UseLambdaInsights
+          - !Ref LambdaInsightsLayerArn
+          - !Ref AWS::NoValue
+      # DynamoDB Streams のバッチサイズとウィンドウ
+      Environment:
+        Variables:
+          BATCH_SIZE: "10"
+      Events:
+        DynamoDBStream:
+          Type: DynamoDB
+          Properties:
+            Stream: !Ref DynamoDBStreamArn
+            StartingPosition: LATEST
+            BatchSize: 10
+            MaximumBatchingWindowInSeconds: 5
+            MaximumRetryAttempts: 3
+            BisectBatchOnFunctionError: true
+            DestinationConfig:
+              OnFailure:
+                Type: SQS
+                Destination: !GetAtt ProcessorDLQ.Arn
+
+  # ========================================
+  # Dead Letter Queue（Processor用）
+  # ========================================
+
+  ProcessorDLQ:
+    Type: AWS::SQS::Queue
+    Condition: UseDynamoDBStreams
+    Properties:
+      QueueName: !Sub terraform-sam-demo-${Environment}-processor-dlq
+      MessageRetentionPeriod: 1209600  # 14日
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ========================================
+  # Scheduled Event（定期実行の例）
+  # ========================================
+
+  ScheduledFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub terraform-sam-demo-${Environment}-scheduled
+      Description: Scheduled task example
+      CodeUri: functions/api/  # 簡略化のため同じコードを使用
+      Handler: index.lambda_handler
+      Role: !Ref LambdaApiRoleArn
+      Timeout: 60
+      Events:
+        DailySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 0 * * ? *)  # 毎日 UTC 00:00
+            Description: Daily maintenance task
+            Enabled: !If [IsProduction, true, false]
+
+  # ========================================
+  # API Gateway
+  # ========================================
+
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub terraform-sam-demo-${Environment}-api
+      StageName: !Ref Environment
+      Description: !Sub API Gateway for ${Environment} environment
+      # API Key 認証（オプション）
+      Auth:
+        ApiKeyRequired: false  # 必要に応じて true に設定
+      # バイナリメディアタイプ
+      BinaryMediaTypes:
+        - application/octet-stream
+        - image/*
+      # OpenAPI 定義（オプション）
+      # DefinitionUri: ./openapi.yaml
+      # エンドポイント設定
+      EndpointConfiguration:
+        Type: REGIONAL
+      # メソッド設定
+      MethodSettings:
+        - ResourcePath: /*
+          HttpMethod: '*'
+          LoggingLevel: !If [IsProduction, "ERROR", "INFO"]
+          DataTraceEnabled: !If [IsProduction, false, true]
+          MetricsEnabled: true
+
+  # ========================================
+  # CloudWatch Alarms
+  # ========================================
+
+  ApiFunction5XXAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${Environment}-api-function-5xx-errors
+      AlarmDescription: Alert when API function has 5XX errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ApiFunction
+      TreatMissingData: notBreaching
+
+  ApiGateway5XXAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${Environment}-apigateway-5xx-errors
+      AlarmDescription: Alert when API Gateway has 5XX errors
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref ApiGateway
+      TreatMissingData: notBreaching
+
+# ========================================
+# Outputs
+# ========================================
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+    Export:
+      Name: !Sub ${Environment}-ApiEndpoint
+
+  ApiFunctionArn:
+    Description: API Lambda Function ARN
+    Value: !GetAtt ApiFunction.Arn
+    Export:
+      Name: !Sub ${Environment}-ApiFunctionArn
+
+  ProcessorFunctionArn:
+    Condition: UseDynamoDBStreams
+    Description: Processor Lambda Function ARN
+    Value: !GetAtt ProcessorFunction.Arn
+    Export:
+      Name: !Sub ${Environment}-ProcessorFunctionArn
+
+  ApiGatewayId:
+    Description: API Gateway ID
+    Value: !Ref ApiGateway
+    Export:
+      Name: !Sub ${Environment}-ApiGatewayId
+
+  CommonLayerArn:
+    Description: Common Layer ARN
+    Value: !Ref CommonLayer
+    Export:
+      Name: !Sub ${Environment}-CommonLayerArn
